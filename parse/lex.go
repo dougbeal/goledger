@@ -69,6 +69,8 @@ const (
 	itemEnd
 	itemAlias
 	itemPrice
+	itemPayee
+	itemAccountNote
 	// itemDef
 	// itemYear
 	// itemBucket
@@ -85,6 +87,8 @@ var key = map[string]itemType{
 	"end":     itemEnd,
 	"alias":   itemAlias,
 	"P":       itemPrice,
+	"payee":   itemPayee,
+	"note":   itemPayee,
 }
 
 var label = map[itemType]string{
@@ -295,7 +299,7 @@ Loop:
 			l.backup()
 			word := l.input[l.start:l.pos]
 			if !l.atTerminator() {
-				return l.errorf("bad character %#U", r)
+				return l.errorf("bad character %#U %s %d %d", r, word, l.start, l.pos)
 			}
 			switch {
 			case word == "include":
@@ -303,6 +307,34 @@ Loop:
 				l.emitSpaces()
 				if !l.emitStringToEOL() {
 					l.errorf("missing filename after 'include'")
+					return nil
+				}
+			case word == "account":
+				l.emit(itemAccountKeyword)
+				l.emitSpaces()
+				if !l.scanAccountName() {
+					l.errorf("missing account name after '%s'", word)
+					return nil
+				}
+			case word == "alias":
+				l.emit(itemAlias)
+				l.emitSpaces()
+				if !l.scanAccountName() {
+					l.errorf("missing account name after '%s'", word)
+					return nil
+				}
+			case word == "payee":
+				l.emit(itemPayee)
+				l.emitSpaces()
+				if !l.emitStringToEOL() {
+					l.errorf("missing payee after '%s'", word)
+					return nil
+				}
+			case word == "note":
+				l.emit(itemAccountNote)
+				l.emitSpaces()
+				if !l.emitStringToEOL() {
+					l.errorf("missing text after '%s'", word)
 					return nil
 				}
 			case word == "P":

@@ -3,6 +3,7 @@ package parse
 import (
 	"fmt"
 	"testing"
+	rtdebug "runtime/debug"
 )
 
 // Make the types prettyprint.
@@ -35,6 +36,50 @@ var (
 var lexTests = []lexTest{
 	{"empty", "", []item{tEOF}},
 	{"spaces", " \t\n", []item{{itemSpace, 0, " \t"}, tEOL, tEOF}},
+	{"account", `account Account`, []item{
+		{itemAccountKeyword, 0, "account"},
+		{itemSpace, 0, " "},
+		{itemAccountName, 0, "Account"},
+		tEOF,
+	}},
+	{"account with alias", "account Account\n alias act", []item{
+		{itemAccountKeyword, 0, "account"},
+		{itemSpace, 0, " "},
+		{itemAccountName, 0, "Account"},
+		tEOL,
+		{itemSpace, 0, " "},
+		{itemAlias, 0, "alias"},
+		{itemSpace, 0, " "},
+		{itemAccountName, 0, "act"},
+		tEOF,
+	}},
+	{"account with 2 aliases", "account Account\n alias act1\n alias act2", []item{
+		{itemAccountKeyword, 0, "account"},
+		{itemSpace, 0, " "},
+		{itemAccountName, 0, "Account"},
+		tEOL,
+		{itemSpace, 0, " "},
+		{itemAlias, 0, "alias"},
+		{itemSpace, 0, " "},
+		{itemAccountName, 0, "act1"},
+		tEOL,
+		{itemSpace, 0, " "},
+		{itemAlias, 0, "alias"},
+		{itemSpace, 0, " "},
+		{itemAccountName, 0, "act2"},
+		tEOF,
+	}},
+	{"account with payee", "account Account\n payee ^someregex", []item{
+		{itemAccountKeyword, 0, "account"},
+		{itemSpace, 0, " "},
+		{itemAccountName, 0, "Account"},
+		tEOL,
+		{itemSpace, 0, " "},
+		{itemPayee, 0, "payee"},
+		{itemSpace, 0, " "},
+		{itemString, 0, "^someregex"},
+		tEOF,
+	}},
 	{"auto xact", `= `, []item{
 		{itemEqual, 0, "="},
 		{itemSpace, 0, " "},
@@ -142,10 +187,11 @@ var lexTests = []lexTest{
 func TestLex(t *testing.T) {
 	for _, test := range lexTests {
 		// if test.name != "less simple transaction" {
-		// 	continue
+		//	continue
 		// }
 		items := collect(&test)
 		if !equal(items, test.items, false) {
+			t.Log(string(rtdebug.Stack()))
 			t.Errorf("test %q: got\n\t%+v\nexpected\n\t%v", test.name, items, test.items)
 		}
 	}

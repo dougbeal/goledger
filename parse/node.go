@@ -58,6 +58,8 @@ const (
 	NodeComment
 	NodeSpace
 	NodeAmount
+	NodeAccount
+	NodeInclude
 )
 
 var nodeLabel = map[NodeType]string{
@@ -68,6 +70,8 @@ var nodeLabel = map[NodeType]string{
 	NodeComment: "NodeComment",
 	NodeSpace:   "NodeSpace",
 	NodeAmount:  "NodeAmount",
+	NodeAccount: "NodeAccount",
+	NodeInclude: "NodeInclude",
 }
 
 /** ListNode **/
@@ -86,6 +90,7 @@ func (t *Tree) newList(pos Pos) *ListNode {
 }
 
 func (l *ListNode) add(n Node) {
+	fmt.Printf("added node %s\n", n.Type().String())
 	l.Nodes = append(l.Nodes, n)
 }
 
@@ -115,6 +120,52 @@ func (l *ListNode) String() string {
 // func (l *ListNode) Copy() Node {
 // 	return l.CopyList()
 // }
+/** IncludeNode **/
+type IncludeNode struct {
+	NodeType
+	Pos
+	tr       *Tree
+	FileName string
+}
+
+func (t *Tree) newInclude(i item) *IncludeNode {
+	n := &IncludeNode{
+		NodeType: NodeInclude,
+		Pos:      i.pos,
+		tr:       t,
+	}
+	t.Root.add(n)
+	return n
+}
+
+func (n *IncludeNode) String() string { return n.FileName }
+func (n *IncludeNode) tree() *Tree    { return n.tr }
+
+/** AccountNode **/
+
+type AccountNode struct {
+	NodeType
+	Pos
+	tr      *Tree
+	Aliases []string
+	Payees  []string
+	Notes   []string
+	Name    string
+}
+
+func (t *Tree) newAccount(i item) *AccountNode {
+	n := &AccountNode{
+		NodeType: NodeAccount,
+		Pos:      i.pos,
+		tr:       t,
+		}
+	t.Root.add(n)
+	return n
+}
+
+
+func (n *AccountNode) String() string { return n.Name }
+func (n *AccountNode) tree() *Tree    { return n.tr }
 
 /** SpaceNode **/
 

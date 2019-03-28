@@ -6,6 +6,10 @@ import (
 	"runtime"
 	"strings"
 	"time"
+	"encoding/json"
+
+	rtdebug "runtime/debug"
+
 )
 
 // Tree is the representation of a single parsed Ledger file.
@@ -79,11 +83,103 @@ func (t *Tree) Parse() (err error) {
 			x := t.newXact(it.pos)
 			x.Date = txDate
 			t.parseXact(x)
+		case itemAccountKeyword:
+			t.parseAccount(it)
+		case itemInclude:
+			t.parseInclude(it)
 		default:
-			t.errorf("unsupported top-level directive")
+			out, _ := json.Marshal(t.Root.Nodes)
+
+			t.errorf("unsupported top-level directive %s %s %s %s\n%s\n%s\n",
+				label[it.typ],
+				label[t.peek().typ],
+				it.String(),
+				t.peek().String(),
+				string(out),
+				string(rtdebug.Stack()),
+			)
 		}
 	}
 	return nil
+}
+
+func (t *Tree) parseInclude(i item) {
+	n := t.newInclude(i)
+	switch it := t.peekNonSpace(); it.typ {
+	case itemString:
+		t.next()
+		n.FileName = it.val
+	case itemEOL, itemEOF:
+		t.errorf("unexpected end of input")
+	default:
+		t.unexpected(it, fmt.Sprintf("generic - %v not followed by string", n))
+		return
+	}
+
+	t.expect(itemEOL, "generic opening line")
+}
+
+func (t *Tree) parseAccount(i item) {
+	n := t.newAccount(i)
+	switch it := t.peekNonSpace(); it.typ {
+	case itemAccountName:
+		t.next()
+		n.Name = it.val
+	case itemEOL, itemEOF:
+		t.errorf("unexpected end of input")
+	default:
+		t.unexpected(it, fmt.Sprintf("generic - %v not followed by string", n))
+		return
+	}
+
+	t.expect(itemEOL, "generic opening line")
+
+	switch it := t.peek(); it.typ {
+	case itemSpace:
+		t.parseAccountSubdirectives(n)
+	}
+	return
+
+}
+/*
+account Expenses:Food
+    note This account is all about the chicken!
+    alias food
+    payee ^(KFC|Popeyes)$
+    check commodity == "$"
+    assert commodity == "$"
+    eval print("Hello!")
+    default
+*/
+func (t *Tree) parseAccountSubdirectives(n *AccountNode) {
+	for {
+		switch it := t.peek(); it.typ {
+		case itemSpace:
+			t.next()
+
+			switch it := t.peek(); it.typ {
+			case itemAlias:
+				t.next()
+				it = t.nextNonSpace()
+				n.Aliases = append(n.Aliases, it.val)
+			case itemPayee:
+				t.next()
+				it = t.nextNonSpace()
+				n.Payees = append(n.Payees, it.val)
+			case itemAccountNote:
+				t.next()
+				it = t.nextNonSpace()
+				n.Notes = append(n.Notes, it.val)
+			default:
+				t.unexpected(it, fmt.Sprintf("account subdirective %v", n))
+				return
+			}
+			t.expect(itemEOL, "account subdirective")
+		default:
+			// end of subdirecives
+			return
+		}
+	}
 }
 
 func (t *Tree) parseXact(x *XactNode) {
@@ -222,7 +318,7 @@ func (t *Tree) parsePosting(p *PostingNode) {
 		t.next()
 		p.Note = it.val
 
-		t.expect(itemEOL, "transaction opening line")
+		t.expect(itemEOL, "transaction opening line - after note")
 		return
 	}
 
@@ -474,7 +570,7 @@ func (t *Tree) ErrorContext(n Node) (location, context string) {
 // errorf formats the error and terminates processing.
 func (t *Tree) errorf(format string, args ...interface{}) {
 	t.Root = nil
-	format = fmt.Sprintf("ledger: %s:%d: %s", t.FileName, t.lex.lineNumber(), format)
+	format = fmt.Sprintf("ledger: %s:%d: %s\n%s", t.FileName, t.lex.lineNumber(), format, string(rtdebug.Stack()))
 	panic(fmt.Errorf(format, args...))
 }
 
@@ -485,7 +581,12 @@ func (t *Tree) error(err error) {
 
 // expect consumes the next token and guarantees it has the required type.
 func (t *Tree) expect(expected itemType, context string) item {
-	token := t.nextNonSpace()
+	var token item
+	if expected == itemSpace {
+		token = t.next()
+	} else {
+		token = t.nextNonSpace()
+	}
 	if token.typ != expected {
 		t.unexpected(token, context)
 	}
@@ -503,7 +604,8 @@ func (t *Tree) expectOneOf(expected1, expected2 itemType, context string) item {
 
 // unexpected complains about the token and terminates processing.
 func (t *Tree) unexpected(token item, context string) {
-	t.errorf("unexpected %s in %s", token, context)
+	out, _ := json.Marshal(t.Root.Nodes)
+	t.errorf("unexpected %s in %s\n%s", token, context, out)
 }
 
 // recover is the handler that turns panics into returns from the top level of Parse.

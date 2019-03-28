@@ -129,6 +129,23 @@ func TestParseEdgeCases(t *testing.T) {
 	treeToJSON(tree)
 }
 
+func TestKeywords(t *testing.T) {
+	tree := New("file.ledger", `
+include stripe.ledger
+include paypal.ledger
+
+
+account Assets:Paypal
+    alias paypal
+    payee ^PAYPAL$
+    note A Note, why not?
+`)
+	err := tree.Parse()
+	require.NoError(t, err)
+	assert.Len(t, tree.Root.Nodes, 5)
+
+}
+
 func TestParseErrors(t *testing.T) {
 	tests := []struct {
 		input string
